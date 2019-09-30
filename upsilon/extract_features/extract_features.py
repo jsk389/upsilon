@@ -75,15 +75,15 @@ class ExtractFeatures:
         else:
             self.min_period = min_period
 
-    def run(self):
+    def run(self, features):
         """Run feature extraction modules."""
-
+        # Features contains a dictionary with all features that are to be computed
         # shallow_run must be executed prior to deep_run
         # since shallow_run calculates several values needed for deep_run.
-        self.shallow_run()
-        self.deep_run()
+        self.shallow_run(features)
+        self.deep_run(features)
 
-    def shallow_run(self):
+    def shallow_run(self, features):
         """Derive not-period-based features."""
         # Number of data points
         self.n_points = len(self.date)
@@ -110,60 +110,72 @@ class ExtractFeatures:
                                            * self.weight) / self.weighted_sum)
 
         # Skewness and kurtosis.
-        self.skewness = ss.skew(self.mag)
-        self.kurtosis = ss.kurtosis(self.mag)
+        if 'skewness' in features:
+            self.skewness = ss.skew(self.mag)
+        if 'kurtosis' in features:
+            self.kurtosis = ss.kurtosis(self.mag)
 
         # Normalization-test. Shapiro-Wilk test.
-        shapiro = ss.shapiro(self.mag)
-        self.shapiro_w = shapiro[0]
-        # self.shapiro_log10p = np.log10(shapiro[1])
+        if 'shapiro_wilk' in features:
+            shapiro = ss.shapiro(self.mag)
+            self.shapiro_w = shapiro[0]
+            # self.shapiro_log10p = np.log10(shapiro[1])
 
         # Percentile features.
-        self.quartile31 = np.percentile(self.mag, 75) \
-                          - np.percentile(self.mag, 25)
+        if 'percentile' in features:
+            self.quartile31 = np.percentile(self.mag, 75) \
+                              - np.percentile(self.mag, 25)
 
         # Stetson K.
-        self.stetson_k = self.get_stetson_k(self.mag, self.median, self.err)
+        if 'stetson_k' in features:
+            self.stetson_k = self.get_stetson_k(self.mag, self.median, self.err)
 
         # Ratio between higher and lower amplitude than average.
-        self.hl_amp_ratio = self.half_mag_amplitude_ratio(
-            self.mag, self.median, self.weight)
+        if 'half_mag_amp_ratio' in features:
+            self.hl_amp_ratio = self.half_mag_amplitude_ratio(
+                self.mag, self.median, self.weight)
         # This second function's value is very similar with the above one.
         # self.hl_amp_ratio2 = self.half_mag_amplitude_ratio2(
         #    self.mag, self.median)
 
         # Cusum
-        self.cusum = self.get_cusum(self.mag)
+        if 'cumsum' in features:
+            self.cusum = self.get_cusum(self.mag)
 
         # Eta
-        self.eta = self.get_eta(self.mag, self.weighted_std)
+        if 'eta' in features:
+            self.eta = self.get_eta(self.mag, self.weighted_std)
 
-    def deep_run(self):
+    def deep_run(self, features):
         """Derive period-based features."""
         # Lomb-Scargle period finding.
-        self.get_period_LS(self.date, self.mag, self.n_threads, self.min_period)
+        if 'period_LS' in features:
+            self.get_period_LS(self.date, self.mag, self.n_threads, self.min_period)
 
-        # Features based on a phase-folded light curve
-        # such as Eta, slope-percentile, etc.
-        # Should be called after the getPeriodLS() is called.
+            # Features based on a phase-folded light curve
+            # such as Eta, slope-percentile, etc.
+            # Should be called after the getPeriodLS() is called.
 
-        # Created phased a folded light curve.
-        # We use period * 2 to take eclipsing binaries into account.
-        phase_folded_date = self.date % (self.period * 2.)
-        sorted_index = np.argsort(phase_folded_date)
+            # Created phased a folded light curve.
+            # We use period * 2 to take eclipsing binaries into account.
+            phase_folded_date = self.date % (self.period * 2.)
+            sorted_index = np.argsort(phase_folded_date)
 
-        folded_date = phase_folded_date[sorted_index]
-        folded_mag = self.mag[sorted_index]
+            folded_date = phase_folded_date[sorted_index]
+            folded_mag = self.mag[sorted_index]
 
         # phase Eta
-        self.phase_eta = self.get_eta(folded_mag, self.weighted_std)
+        if 'phase_eta' in features:
+            self.phase_eta = self.get_eta(folded_mag, self.weighted_std)
 
         # Slope percentile.
-        self.slope_per10, self.slope_per90 = \
-            self.slope_percentile(folded_date, folded_mag)
+        if 'slope_percentile' in features:
+            self.slope_per10, self.slope_per90 = \
+                self.slope_percentile(folded_date, folded_mag)
 
         # phase Cusum
-        self.phase_cusum = self.get_cusum(folded_mag)
+        if 'phase_cumsum' in features:
+            self.phase_cusum = self.get_cusum(folded_mag)
 
     def get_period_LS(self, date, mag, n_threads, min_period):
         """
